@@ -1,5 +1,6 @@
 import { getDataCached } from "../firebase.js";
 import { nomeSquadra } from "../utils/torneo.js";
+import { DIVISIONE_UNICA } from "../divisione.js";
 
 /*
 ===================================
@@ -7,9 +8,15 @@ ALBO D'ORO
 ===================================
 Calcio/AlboOro/{Divisione}/{anno} = { PrimoClassificato, SecondoClassificato }
 Una tabella per anno, dal più recente, con il link alle classifiche di quell'edizione.
+Un anno con la divisione unica (Calcio/AlboOro/Unica/{anno}) ha una colonna
+sola, senza titolo.
 */
 
 const DIVISIONI = ["Superiori", "Giovani"];
+
+function divisioniAnno(anno, albo) {
+  return albo[DIVISIONE_UNICA]?.[anno] ? [DIVISIONE_UNICA] : DIVISIONI;
+}
 
 function crea(tag, classe, testo = null) {
   const elemento = document.createElement(tag);
@@ -37,12 +44,15 @@ function tabellaAnno(anno, albo) {
   blocco.appendChild(crea("h2", "albo-table-title", anno));
 
   const tabella = crea("table", "albo-table");
-  const intestazione = tabella.createTHead().insertRow();
-  DIVISIONI.forEach((divisione) => {
-    const th = crea("th", "albo-table-header", divisione);
-    th.scope = "col";
-    intestazione.appendChild(th);
-  });
+  const divisioni = divisioniAnno(anno, albo);
+  if (divisioni.length > 1) {
+    const intestazione = tabella.createTHead().insertRow();
+    divisioni.forEach((divisione) => {
+      const th = crea("th", "albo-table-header", divisione);
+      th.scope = "col";
+      intestazione.appendChild(th);
+    });
+  }
 
   const corpo = tabella.createTBody();
   [
@@ -50,7 +60,7 @@ function tabellaAnno(anno, albo) {
     ["🥈", "SecondoClassificato"],
   ].forEach(([medaglia, campo]) => {
     const riga = corpo.insertRow();
-    DIVISIONI.forEach((divisione) => {
+    divisioni.forEach((divisione) => {
       riga.appendChild(
         crea("td", "albo-table-cell", piazzamento(medaglia, albo[divisione]?.[anno]?.[campo]))
       );

@@ -1,6 +1,7 @@
 import { db, ref, remove, update, getData, setData, updateData, urlFile } from "../firebase.js";
 import { TELEFONO_REGEX, pulisciTelefono } from "../utils/contatti.js";
-import { edition } from "../divisione.js";
+import { edition, divisioneUnica, divisioneDiIscrizione, nomeDivisione } from "../divisione.js";
+import { iscrizioneConvertita } from "./da-fare.js";
 import { capitalize, formatDateTime } from "../utils/formattazione.js";
 import { conferma as chiediConferma, avviso as finestraAvviso, mostraToast } from "../utils/interfaccia.js";
 
@@ -13,8 +14,13 @@ ISCRIZIONI (gestionale)
 ===================================
 Legge da:    Calcio/{edizione}/Iscrizioni
 Converte in: Calcio/{edizione}/{Divisione}/Squadre
+
+Con la divisione unica (vedi divisione.js) le iscrizioni arrivate come
+Superiori o Giovani tengono la loro divisione, ma diventano tutte squadre di
+Calcio/{edizione}/Unica e l'elenco non è più diviso in gruppi.
 */
 
+// Divisioni che si possono scegliere iscrivendosi a un'edizione con due divisioni
 const DIVISIONI = ["Superiori", "Giovani"];
 
 const LOGO_DEFAULT =
@@ -93,6 +99,40 @@ function linkSicuro(url) {
   }
 }
 
+// Con la divisione unica si converte qualunque iscrizione, con due divisioni
+// solo quelle di Superiori o Giovani
+function divisioneValida(iscrizione) {
+  return divisioneUnica() || DIVISIONI.includes(iscrizione.Divisione);
+}
+
+// " in Superiori", oppure niente con la divisione unica
+function inDivisione(iscrizione) {
+  const nome = nomeDivisione(divisioneDiIscrizione(iscrizione.Divisione));
+  return nome ? ` in ${nome}` : "";
+}
+
+/*
+ Con la divisione unica "San Giorgio" iscritta sia in Superiori sia in Giovani
+ diventerebbe una squadra sola: finché una delle due non viene rinominata
+ (es. San Giorgio A e San Giorgio B) nessuna delle due si può convertire.
+ Restituisce i nomi di squadra usati da più di un'iscrizione.
+*/
+function nomiDoppi() {
+  if (!divisioneUnica()) return new Set();
+  const visti = new Set();
+  const doppi = new Set();
+  iscrizioniCache.forEach((iscrizione) => {
+    const nome = chiaveSquadra(iscrizione.NomeSquadra || "");
+    if (visti.has(nome)) doppi.add(nome);
+    visti.add(nome);
+  });
+  return doppi;
+}
+
+function nomeDoppio(iscrizione) {
+  return nomiDoppi().has(chiaveSquadra(iscrizione.NomeSquadra || ""));
+}
+
 function conteggioPersone(iscrizione) {
   return {
     responsabili: comeLista(iscrizione.Responsabili).length,
@@ -116,7 +156,9 @@ async function caricaIscrizioni() {
     .map(([chiave, dati]) => ({ chiave, ...dati }))
     .sort((a, b) => {
       // Prima per divisione (Superiori, Giovani), poi per nome squadra
-      const ordineDivisione = DIVISIONI.indexOf(a.Divisione) - DIVISIONI.indexOf(b.Divisione);
+      const ordineDivisione = divisioneUnica()
+        ? 0
+        : DIVISIONI.indexOf(a.Divisione) - DIVISIONI.indexOf(b.Divisione);
       if (ordineDivisione !== 0) return ordineDivisione;
       return (a.NomeSquadra || "").localeCompare(b.NomeSquadra || "", "it");
     });
@@ -126,7 +168,7 @@ function iscrizioniFiltrate() {
   const testo = filtroTesto.trim().toLowerCase();
 
   return iscrizioniCache.filter((iscrizione) => {
-    if (filtroDivisione !== "Tutte" && iscrizione.Divisione !== filtroDivisione) {
+    if (!divisioneUnica() && filtroDivisione !== "Tutte" && iscrizione.Divisione !== filtroDivisione) {
       return false;
     }
     if (!testo) return true;
@@ -191,6 +233,12 @@ function disegnaElenco() {
     return;
   }
 
+  // Divisione unica: tutte insieme, senza gruppi
+  if (divisioneUnica()) {
+    visibili.forEach((iscrizione) => elenco.appendChild(creaCard(iscrizione)));
+    return;
+  }
+
   DIVISIONI.forEach((divisione) => {
     const gruppo = visibili.filter((i) => i.Divisione === divisione);
     if (gruppo.length === 0) return;
@@ -219,7 +267,7 @@ function creaBarraStrumenti() {
   barra.id = "iscrizioni-toolbar";
 
   const totali = iscrizioniCache.length;
-  const daConvertire = iscrizioniCache.filter((i) => i.Stato !== "Convertita").length;
+  const daConvertire = iscrizioniCache.filter((i) => !iscrizioneConvertita(i)).length;
 
   const riepilogo = document.createElement("div");
   riepilogo.className = "iscrizioni-riepilogo";
@@ -245,7 +293,7 @@ function creaBarraStrumenti() {
     filtroDivisione = selectDivisione.value;
     disegnaElenco();
   });
-  controlli.appendChild(selectDivisione);
+  if (!divisioneUnica()) controlli.appendChild(selectDivisione);
 
   const ricerca = document.createElement("input");
   ricerca.type = "search";
@@ -284,7 +332,7 @@ function creaBarraStrumenti() {
 
 function creaCard(iscrizione) {
   const conteggi = conteggioPersone(iscrizione);
-  const convertita = iscrizione.Stato === "Convertita";
+  const convertita = iscrizioneConvertita(iscrizione);
   const aperta = carteAperte.has(iscrizione.chiave);
 
   const card = document.createElement("div");
@@ -305,15 +353,25 @@ function creaCard(iscrizione) {
   nomeSquadraEl.textContent = iscrizione.NomeSquadra || iscrizione.chiave;
   titolo.appendChild(nomeSquadraEl);
 
-  const badgeDivisione = document.createElement("span");
-  badgeDivisione.className = "badge badge-divisione";
-  badgeDivisione.textContent = iscrizione.Divisione || "?";
-  titolo.appendChild(badgeDivisione);
+  if (!divisioneUnica()) {
+    const badgeDivisione = document.createElement("span");
+    badgeDivisione.className = "badge badge-divisione";
+    badgeDivisione.textContent = iscrizione.Divisione || "?";
+    titolo.appendChild(badgeDivisione);
+  }
 
   const badgeStato = document.createElement("span");
   badgeStato.className = convertita ? "badge badge-convertita" : "badge badge-nuova";
   badgeStato.textContent = convertita ? "Convertita" : "Da convertire";
   titolo.appendChild(badgeStato);
+
+  if (!convertita && nomeDoppio(iscrizione)) {
+    const badgeDoppio = document.createElement("span");
+    badgeDoppio.className = "badge badge-nuova";
+    badgeDoppio.textContent = "Nome doppio";
+    badgeDoppio.title = "Un'altra iscrizione ha lo stesso nome: rinominane una prima di convertirla";
+    titolo.appendChild(badgeDoppio);
+  }
 
   const meta = document.createElement("div");
   meta.className = "iscrizione-meta";
@@ -349,7 +407,7 @@ function creaCard(iscrizione) {
 }
 
 function mostraDettaglio(dettaglio, iscrizione) {
-  const convertita = iscrizione.Stato === "Convertita";
+  const convertita = iscrizioneConvertita(iscrizione);
 
   dettaglio.replaceChildren();
   dettaglio.classList.remove("in-modifica");
@@ -527,7 +585,8 @@ function mostraModifica(dettaglio, iscrizione) {
     divisioneSelect.appendChild(opzione);
   });
   divisioneSelect.value = DIVISIONI.includes(iscrizione.Divisione) ? iscrizione.Divisione : DIVISIONI[0];
-  campiSquadra.appendChild(divisioneSelect);
+  // Con la divisione unica la divisione dell'iscrizione non conta più e resta com'era
+  if (!divisioneUnica()) campiSquadra.appendChild(divisioneSelect);
 
   sezioneSquadra.appendChild(campiSquadra);
   dettaglio.appendChild(sezioneSquadra);
@@ -571,7 +630,7 @@ function mostraModifica(dettaglio, iscrizione) {
 
     const dati = {
       NomeSquadra: nomeSquadra,
-      Divisione: divisioneSelect.value,
+      Divisione: divisioneUnica() ? iscrizione.Divisione : divisioneSelect.value,
     };
     editor.forEach(({ campo, leggi }) => {
       const risultato = leggi();
@@ -703,14 +762,14 @@ function creaEditorPersone(campo, singolare, persone) {
 async function salvaModifiche(iscrizione, dati) {
   const { chiave: vecchiaChiave, ...datiAttuali } = iscrizione;
   const nuovaChiave = chiaveIscrizione(dati.Divisione, dati.NomeSquadra);
-  const convertita = iscrizione.Stato === "Convertita";
+  const convertita = iscrizioneConvertita(iscrizione);
   const squadraCambiata =
     chiaveSquadra(dati.NomeSquadra) !== chiaveSquadra(iscrizione.NomeSquadra || "") ||
     dati.Divisione !== iscrizione.Divisione;
 
   if (convertita && squadraCambiata) {
     const conferma = await chiediConferma(
-      `Questa iscrizione è già stata convertita: nel torneo la squadra resta "${iscrizione.NomeSquadra}" (${iscrizione.Divisione}).\n\n` +
+      `Questa iscrizione è già stata convertita: nel torneo la squadra resta "${iscrizione.NomeSquadra}"${inDivisione(iscrizione)}.\n\n` +
         "Per rinominarla usa la pagina Squadre, che aggiorna anche calendario e partite.\n" +
         'Attenzione: "Riconverti in squadra" con il nuovo nome creerebbe una seconda squadra.\n\n' +
         "Vuoi salvare comunque l'iscrizione?"
@@ -778,7 +837,9 @@ CONVERSIONE IN SQUADRA
 // Scrive la squadra nel nodo Squadre della divisione.
 // Se la squadra esiste già aggiorna solo i membri, mantenendo girone, logo e penalità.
 async function scriviSquadra(iscrizione, sovrascriviEsistente) {
-  const percorsoSquadra = `Calcio/${edition}/${iscrizione.Divisione}/Squadre/${chiaveSquadra(iscrizione.NomeSquadra)}`;
+  const divisione = divisioneDiIscrizione(iscrizione.Divisione);
+  const chiave = chiaveSquadra(iscrizione.NomeSquadra);
+  const percorsoSquadra = `Calcio/${edition}/${divisione}/Squadre/${chiave}`;
   const esistente = await getData(percorsoSquadra);
 
   if (esistente && !sovrascriviEsistente) {
@@ -795,26 +856,40 @@ async function scriviSquadra(iscrizione, sovrascriviEsistente) {
     // Aggiorna i membri senza toccare Girone/Logo/Penalità già impostati
     await updateData(percorsoSquadra, membri);
   } else {
+    // Passando alla divisione unica una squadra già creata in Superiori o
+    // Giovani si porta dietro logo e penalità (il girone si rifà)
+    const precedente =
+      divisione !== iscrizione.Divisione && DIVISIONI.includes(iscrizione.Divisione)
+        ? await getData(`Calcio/${edition}/${iscrizione.Divisione}/Squadre/${chiave}`)
+        : null;
     await setData(percorsoSquadra, {
       ...membri,
       Girone: "",
-      Logo: LOGO_DEFAULT,
-      LogoLR: "",
-      Penalità: 0,
+      Logo: precedente?.Logo || LOGO_DEFAULT,
+      LogoLR: precedente?.LogoLR || "",
+      Penalità: precedente?.Penalità || 0,
     });
   }
 
   await updateData(`${iscrizioniPath()}/${iscrizione.chiave}`, {
     Stato: "Convertita",
     ConvertitaIl: new Date().toISOString(),
+    ConvertitaIn: divisione,
   });
 
   return { esito: esistente ? "aggiornata" : "creata", percorsoSquadra };
 }
 
 async function convertiSingola(iscrizione) {
-  if (!DIVISIONI.includes(iscrizione.Divisione)) {
+  if (!divisioneValida(iscrizione)) {
     segnalaErrore("Divisione non valida: impossibile convertire questa iscrizione.");
+    return;
+  }
+  if (nomeDoppio(iscrizione)) {
+    finestraAvviso(
+      `Un'altra iscrizione si chiama "${iscrizione.NomeSquadra}": con la divisione unica sarebbero la stessa squadra.\n\n` +
+        'Rinominane una con "Modifica" (es. aggiungendo A o B al nome) e poi convertila.'
+    );
     return;
   }
 
@@ -825,7 +900,7 @@ async function convertiSingola(iscrizione) {
 
     if (risultato.esito === "esistente") {
       const conferma = await chiediConferma(
-        `La squadra "${nomeSquadra}" esiste già in ${iscrizione.Divisione}.\n\n` +
+        `La squadra "${nomeSquadra}" esiste già${inDivisione(iscrizione)}.\n\n` +
           "Vuoi aggiornare responsabili, allenatori e giocatori con i dati dell'iscrizione?\n" +
           "(girone, logo e penalità restano invariati)"
       );
@@ -835,8 +910,8 @@ async function convertiSingola(iscrizione) {
 
     mostraToast(
       risultato.esito === "creata"
-        ? `Squadra "${nomeSquadra}" creata in ${iscrizione.Divisione}.`
-        : `Squadra "${nomeSquadra}" aggiornata in ${iscrizione.Divisione}.`
+        ? `Squadra "${nomeSquadra}" creata${inDivisione(iscrizione)}.`
+        : `Squadra "${nomeSquadra}" aggiornata${inDivisione(iscrizione)}.`
     );
     showIscrizioni();
   } catch (error) {
@@ -846,12 +921,22 @@ async function convertiSingola(iscrizione) {
 }
 
 async function convertiTutteLeIscrizioni() {
-  const daConvertire = iscrizioniFiltrate().filter(
-    (iscrizione) => iscrizione.Stato !== "Convertita" && DIVISIONI.includes(iscrizione.Divisione)
+  const nonConvertite = iscrizioniFiltrate().filter(
+    (iscrizione) => !iscrizioneConvertita(iscrizione) && divisioneValida(iscrizione)
   );
+  // Nomi doppi con la divisione unica: si sistemano a mano (vedi nomiDoppi)
+  const doppie = nonConvertite.filter(nomeDoppio);
+  const daConvertire = nonConvertite.filter((iscrizione) => !nomeDoppio(iscrizione));
 
   if (daConvertire.length === 0) {
-    mostraToast("Non ci sono iscrizioni da convertire con i filtri attuali.");
+    if (doppie.length > 0) {
+      finestraAvviso(
+        `Restano solo iscrizioni con lo stesso nome di un'altra: ${doppie.map((i) => i.NomeSquadra).join(", ")}.\n\n` +
+          'Con la divisione unica sarebbero la stessa squadra: rinominane una con "Modifica" (es. aggiungendo A o B al nome).'
+      );
+    } else {
+      mostraToast("Non ci sono iscrizioni da convertire con i filtri attuali.");
+    }
     return;
   }
 
@@ -883,6 +968,9 @@ async function convertiTutteLeIscrizioni() {
   if (saltate.length > 0) {
     messaggio += `\nGià esistenti (saltate): ${saltate.join(", ")}`;
   }
+  if (doppie.length > 0) {
+    messaggio += `\nNome uguale a un'altra iscrizione (da rinominare): ${doppie.map((i) => i.NomeSquadra).join(", ")}`;
+  }
   if (errori.length > 0) {
     messaggio += `\nErrori: ${errori.join(", ")}`;
   }
@@ -899,7 +987,7 @@ ELIMINAZIONE
 
 async function eliminaIscrizione(iscrizione) {
   const conferma = await chiediConferma(
-    `Vuoi eliminare definitivamente l'iscrizione di "${iscrizione.NomeSquadra}" (${iscrizione.Divisione})?\n\n` +
+    `Vuoi eliminare definitivamente l'iscrizione di "${iscrizione.NomeSquadra}"${inDivisione(iscrizione)}?\n\n` +
       "L'eventuale squadra già creata nel torneo NON verrà eliminata."
   );
   if (!conferma) return;

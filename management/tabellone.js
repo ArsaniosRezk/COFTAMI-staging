@@ -1,6 +1,6 @@
 import { PERCORSO_IMPOSTAZIONI } from "/js/ambiente.js";
 import { db, ref, set, update, remove, getData, getPaths } from "/js/firebase.js";
-import { edition, getSelectedDivision } from "/js/divisione.js";
+import { edition, getSelectedDivision, nomeDivisione } from "/js/divisione.js";
 import { nomeSquadra } from "/js/utils/torneo.js";
 import { creaLogo } from "/js/utils/logo.js";
 import { mostraToast, conferma } from "/js/utils/interfaccia.js";
@@ -433,7 +433,7 @@ export async function initTabellone() {
   stato.squadre = squadre || {};
   stato.bozza = creaTabellone({ precedente: salvato });
 
-  $("tabellone-divisione").textContent = `· ${divisione}`;
+  $("tabellone-divisione").textContent = nomeDivisione(divisione) ? `· ${nomeDivisione(divisione)}` : "";
 
   // Suggerimenti: squadre della divisione e campi già usati in calendario
   $("tabellone-squadre").replaceChildren(

@@ -1,4 +1,4 @@
-import { edition } from "../divisione.js";
+import { edition, nomeDivisione } from "../divisione.js";
 
 import { partiteGiornata, calcolaClassifiche } from "./social/dati.js";
 import {
@@ -68,7 +68,7 @@ function esporta(canvas, nome) {
 }
 
 function nomeFile(division, tipo, suffisso = "") {
-  return `COFTA-${edition}-${division}-${tipo}${suffisso}.png`;
+  return `${["COFTA", edition, nomeDivisione(division), tipo].filter(Boolean).join("-")}${suffisso}.png`;
 }
 
 /**

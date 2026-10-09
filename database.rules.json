@@ -31,6 +31,47 @@
     "Impostazioni": { ".read": true },
     "ImpostazioniTest": { ".read": true },
 
+    /* Sito del beach volley (repository COFTA-BEACHVOLLEY). Il suo gestionale non usa
+       Google ma un PIN, che sta in Beach Volley/Accesso/Pin e non è leggibile dal pubblico.
+       Il gestionale fa un accesso anonimo a Firebase e scrive il PIN inserito in
+       Accesso/Sessioni/<uid>: la scrittura passa solo se coincide con quello vero, e da lì
+       quell'utente anonimo legge e scrive tutto il beach volley finché il PIN non cambia.
+       Il PIN va creato a mano la prima volta (Firebase console). Gli amministratori Google
+       entrano comunque, per la regola generale qui sopra */
+    "Beach Volley": {
+      ".read": "auth != null && root.child('Beach Volley/Accesso/Pin').exists() && root.child('Beach Volley/Accesso/Sessioni').child(auth.uid).val() == root.child('Beach Volley/Accesso/Pin').val()",
+      ".write": "auth != null && root.child('Beach Volley/Accesso/Pin').exists() && root.child('Beach Volley/Accesso/Sessioni').child(auth.uid).val() == root.child('Beach Volley/Accesso/Pin').val()",
+
+      "Accesso": {
+        "Pin": { ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 40" },
+        "Sessioni": {
+          "$uid": {
+            /* Ognuno scrive solo la propria sessione, e solo con il PIN giusto
+               (quello nuovo, se nella stessa scrittura il PIN cambia) */
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.val() == newData.parent().parent().child('Pin').val()"
+          }
+        }
+      },
+
+      "Impostazioni": { ".read": true },
+
+      "$edizione": {
+        "Iscrizioni": {
+          "$chiave": {
+            /* Come le iscrizioni del calcio. Il nome della squadra è leggibile da tutti:
+               il modulo controlla prima di caricare l'allegato se la squadra è già iscritta */
+            ".write": "!data.exists() && newData.exists() && root.child('Beach Volley/Impostazioni/iscrizioniAperte').val() != false && newData.hasChildren(['Divisione', 'NomeSquadra', 'Responsabili', 'Allenatori', 'Giocatori', 'ModuloFirmato', 'OraInvio', 'Stato']) && (newData.child('Divisione').val() == 'Maschile' || newData.child('Divisione').val() == 'Femminile') && newData.child('NomeSquadra').isString() && newData.child('NomeSquadra').val().length > 0 && newData.child('NomeSquadra').val().length <= 60 && newData.child('ModuloFirmato/Percorso').isString() && newData.child('ModuloFirmato/Percorso').val().beginsWith('Moduli/BV-') && newData.child('Stato').val() == 'Nuova' && newData.child('OraInvio').isString() && newData.child('OraInvio').val().length <= 40",
+            "NomeSquadra": { ".read": true },
+            "Responsabili": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },
+            "Allenatori": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },
+            "Giocatori": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },
+            "Arbitri": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } }
+          }
+        }
+      }
+    },
+
     "Calcio": {
       "AlboOro": { ".read": true },
 
@@ -42,8 +83,9 @@
             /* Dal modulo pubblico: solo iscrizioni nuove, solo se le iscrizioni sono aperte e solo
                con i campi giusti. I controlli sono qui e non in ".validate" perché
                ".validate" varrebbe anche per gli amministratori, che devono poter
-               correggere anche le iscrizioni vecchie */
-            ".write": "!data.exists() && newData.exists() && (($edizione == 'Test' && root.child('ImpostazioniTest/iscrizioniAperte').val() != false) || ($edizione != 'Test' && root.child('Impostazioni/iscrizioniAperte').val() != false)) && newData.hasChildren(['Divisione', 'NomeSquadra', 'Responsabili', 'Allenatori', 'Giocatori', 'ModuloFirmato', 'OraInvio', 'Stato']) && (newData.child('Divisione').val() == 'Superiori' || newData.child('Divisione').val() == 'Giovani') && newData.child('NomeSquadra').isString() && newData.child('NomeSquadra').val().length > 0 && newData.child('NomeSquadra').val().length <= 60 && newData.child('ModuloFirmato/Percorso').isString() && newData.child('ModuloFirmato/Percorso').val().beginsWith('Moduli/') && newData.child('Stato').val() == 'Nuova' && newData.child('OraInvio').isString() && newData.child('OraInvio').val().length <= 40",
+               correggere anche le iscrizioni vecchie.
+               La divisione "Unica" vale solo per un'edizione con Impostazioni/divisioneUnica/<edizione> */
+            ".write": "!data.exists() && newData.exists() && (($edizione == 'Test' && root.child('ImpostazioniTest/iscrizioniAperte').val() != false) || ($edizione != 'Test' && root.child('Impostazioni/iscrizioniAperte').val() != false)) && newData.hasChildren(['Divisione', 'NomeSquadra', 'Responsabili', 'Allenatori', 'Giocatori', 'ModuloFirmato', 'OraInvio', 'Stato']) && (newData.child('Divisione').val() == 'Superiori' || newData.child('Divisione').val() == 'Giovani' || (newData.child('Divisione').val() == 'Unica' && (($edizione == 'Test' && root.child('ImpostazioniTest/divisioneUnica').child($edizione).val() == true) || ($edizione != 'Test' && root.child('Impostazioni/divisioneUnica').child($edizione).val() == true)))) && newData.child('NomeSquadra').isString() && newData.child('NomeSquadra').val().length > 0 && newData.child('NomeSquadra').val().length <= 60 && newData.child('ModuloFirmato/Percorso').isString() && newData.child('ModuloFirmato/Percorso').val().beginsWith('Moduli/') && newData.child('Stato').val() == 'Nuova' && newData.child('OraInvio').isString() && newData.child('OraInvio').val().length <= 40",
             "Responsabili": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },
             "Allenatori": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },
             "Giocatori": { "$i": { "$campo": { ".validate": "newData.isString() && newData.val().length <= 120" } } },

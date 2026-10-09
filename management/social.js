@@ -1,10 +1,11 @@
 import { caricaDatiSocial, generaGrafiche } from "/js/components/grafiche-social.js";
+import { getSelectedDivision } from "/js/divisione.js";
 
 // Immagini generate: { nome, blob, url, selezionata }
 let immaginiCorrenti = [];
 
 export const initSocial = async () => {
-  const division = document.getElementById("division")?.value || "Superiori";
+  const division = document.getElementById("division")?.value || getSelectedDivision();
   const contenuto = document.getElementById("social-content");
   const giornataSelect = contenuto.querySelector("#social-giornata-select");
   const bottoni = contenuto.querySelectorAll(".social-buttons button");

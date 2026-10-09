@@ -83,9 +83,63 @@ function tornaEdizioneCorrente() {
   location.href = indirizzo.href;
 }
 
-// Definizione variabile e funzioni per gestione divisione
-const DIVISIONI = ["Superiori", "Giovani"];
+/*
+===================================
+DIVISIONI
+===================================
+
+Di solito Superiori e Giovani. Un'edizione con
+Impostazioni/divisioneUnica/{edizione} = true (interruttore nella dashboard)
+ha invece una divisione sola e senza nome: tutte le squadre stanno insieme
+in Calcio/{edizione}/Unica e il selettore Superiori/Giovani sparisce.
+Le edizioni passate restano come erano.
+
+`DIVISIONI` è un export "vivo" come `edition`: impostazioni.js lo imposta
+con impostaDivisioni() prima che le pagine leggano i dati. Fino ad allora
+vale la scelta vista all'ultima visita, così il selettore non compare per
+poi sparire.
+*/
+
+const DIVISIONI_SEPARATE = ["Superiori", "Giovani"];
+const DIVISIONE_UNICA = "Unica";
+const CHIAVE_DIVISIONE_UNICA = "cofta_divisione_unica";
+
+function divisioniDi(edizione, divisioneUnica) {
+  return divisioneUnica?.[edizione] === true ? [DIVISIONE_UNICA] : DIVISIONI_SEPARATE;
+}
+
+function divisioneUnicaSalvata() {
+  try {
+    return JSON.parse(leggiStorage(localStorage, CHIAVE_DIVISIONE_UNICA));
+  } catch (errore) {
+    return null;
+  }
+}
+
+let DIVISIONI = divisioniDi(edition, divisioneUnicaSalvata());
 let selectedDivision;
+
+function divisioneUnica() {
+  return DIVISIONI.length === 1;
+}
+
+// Nome da mostrare: la divisione unica non ne ha
+function nomeDivisione(divisione) {
+  return divisione === DIVISIONE_UNICA ? "" : divisione || "";
+}
+
+// Divisione in cui finisce la squadra di un'iscrizione: con la divisione
+// unica anche le iscrizioni arrivate come Superiori o Giovani vanno lì
+function divisioneDiIscrizione(divisioneIscritta) {
+  return divisioneUnica() ? DIVISIONE_UNICA : divisioneIscritta;
+}
+
+// Chiamata da impostazioni.js con Impostazioni/divisioneUnica
+function impostaDivisioni(divisioneUnicaServer) {
+  scriviStorage(localStorage, CHIAVE_DIVISIONE_UNICA, JSON.stringify(divisioneUnicaServer || {}));
+  DIVISIONI = divisioniDi(edition, divisioneUnicaServer);
+  mostraDivisioni();
+}
 
 function getSelectedDivision() {
   return selectedDivision;
@@ -96,9 +150,28 @@ function setSelectedDivision(value) {
   scriviStorage(localStorage, "selectedDivision", selectedDivision);
 }
 
+// La scelta salvata non si sovrascrive: tornando a un'edizione con due
+// divisioni (o all'archivio) si ritrova quella di prima
 function loadSavedOption() {
   const savedOption = leggiStorage(localStorage, "selectedDivision");
-  selectedDivision = DIVISIONI.includes(savedOption) ? savedOption : "Superiori";
+  selectedDivision = DIVISIONI.includes(savedOption) ? savedOption : DIVISIONI[0];
+}
+
+// Con la divisione unica la classe "divisione-unica" su <html> nasconde i
+// selettori (vedi base.css e gestionale.css). Il select #division dell'header
+// e del gestionale ha come opzioni le divisioni dell'edizione; quello del
+// modulo del referto lo gestisce invia-referto.js
+function mostraDivisioni() {
+  document.documentElement.classList.toggle("divisione-unica", divisioneUnica());
+  const select = document.getElementById("division");
+  if (!select || paginaCorrente() === "invia-report") return;
+
+  const attuali = [...select.options].map((opzione) => opzione.value);
+  if (attuali.join() !== DIVISIONI.join()) {
+    select.replaceChildren(...DIVISIONI.map((divisione) => new Option(divisione, divisione)));
+  }
+  loadSavedOption();
+  updateSelectElement("division", selectedDivision);
 }
 
 // Allinea il select #division e i pulsanti del selettore nell'header
@@ -125,6 +198,11 @@ export {
   edizioneTest,
   edizioneForzata,
   DIVISIONI,
+  DIVISIONE_UNICA,
+  divisioneUnica,
+  nomeDivisione,
+  divisioneDiIscrizione,
+  impostaDivisioni,
 };
 
 // Logica per il caricamento delle funzioni
@@ -154,17 +232,18 @@ async function eseguiSequenza() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  loadSavedOption();
+// La classe su <html> va messa subito, prima che la pagina compaia
+document.documentElement.classList.toggle("divisione-unica", divisioneUnica());
 
-  // Altre pagine hanno un loro select "division" (es. il modulo del referto):
-  // si tocca solo quello dell'header e del gestionale
+document.addEventListener("DOMContentLoaded", async () => {
+  mostraDivisioni();
+
+  // Il cambio di divisione si ascolta solo dove c'è il selettore
+  // (il modulo del referto ha un suo select "division")
   const divisionSelect = document.getElementById("division");
   const conSelettore = pagineConDivisione.includes(pagina) || pagina === "gestionale";
 
   if (divisionSelect && conSelettore) {
-    updateSelectElement("division", getSelectedDivision());
-
     divisionSelect.addEventListener("change", function () {
       setSelectedDivision(this.value);
       updateSelectElement("division", this.value);

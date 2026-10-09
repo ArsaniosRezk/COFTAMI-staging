@@ -1,3 +1,2 @@
 User-agent: *
-Allow: /
-Sitemap: https://coftamilano.com/sitemap.xml
+Disallow: /

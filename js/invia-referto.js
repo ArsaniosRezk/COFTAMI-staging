@@ -1,5 +1,6 @@
 import { getData, setData, getPaths } from "./firebase.js";
 import { impostazioniPronte } from "./impostazioni.js";
+import { DIVISIONE_UNICA, divisioneUnica } from "./divisione.js";
 import { nomeSquadra } from "./utils/torneo.js";
 
 /*
@@ -283,9 +284,21 @@ $("nuovo-referto").addEventListener("click", () => {
   form.hidden = false;
   $("referto-inviato").hidden = true;
   window.scrollTo({ top: 0, behavior: "smooth" });
+  if (divisioneUnica()) scegliDivisioneUnica();
 });
+
+// Con la divisione unica (vedi divisione.js) il campo sparisce: è già scelta
+// e le giornate si caricano subito
+function scegliDivisioneUnica() {
+  const campo = divisionSelect.closest(".campo");
+  campo.hidden = true;
+  campo.parentElement.classList.remove("due-colonne");
+  divisionSelect.replaceChildren(new Option(DIVISIONE_UNICA, DIVISIONE_UNICA, true, true));
+  divisionSelect.dispatchEvent(new Event("change"));
+}
 
 // I percorsi dipendono dall'edizione corrente, letta dalle impostazioni:
 // la divisione si sceglie solo quando è nota
 await impostazioniPronte;
 divisionSelect.disabled = false;
+if (divisioneUnica()) scegliDivisioneUnica();

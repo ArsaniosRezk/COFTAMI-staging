@@ -61,6 +61,11 @@ body {
   background-color: var(--tertiary);
 }
 
+/* Edizione con una divisione sola (vedi js/divisione.js) */
+.divisione-unica .cs-divisione {
+  display: none;
+}
+
 .cs-divisione button {
   min-height: 38px;
   padding: 0 18px;

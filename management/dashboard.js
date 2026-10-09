@@ -1,7 +1,7 @@
 import { classificaGirone, classificaMarcatori } from "/js/components/classifiche.js";
 import { PERCORSO_IMPOSTAZIONI, PERCORSO_AMMINISTRATORI } from "/js/ambiente.js";
 import { db, ref, get, set, update, remove, getData } from "/js/firebase.js";
-import { edition, getSelectedDivision } from "/js/divisione.js";
+import { edition, getSelectedDivision, nomeDivisione } from "/js/divisione.js";
 import { impostaEdizioneLocale } from "/js/edizione-locale.js";
 import { PAGINE_CONTROLLABILI, paginaAttiva } from "/js/pagine-attive.js";
 import { utente, esci, chiaveEmail } from "/js/accesso.js";
@@ -95,7 +95,8 @@ SITO PUBBLICO
 // Giornata in evidenza in home, per la divisione scelta
 async function preparaGiornata() {
   const divisione = getSelectedDivision();
-  $("divisione-giornata").textContent = `(${divisione})`;
+  const nome = nomeDivisione(divisione);
+  $("divisione-giornata").textContent = nome ? `(${nome})` : "";
   const percorso = `Calcio/${edition}/${divisione}/GiornataDaMostrare`;
 
   const [perDivisione, globale, calendario] = await Promise.all([
@@ -130,7 +131,7 @@ async function preparaGiornata() {
   select.addEventListener("change", async () => {
     try {
       await set(ref(db, percorso), select.value);
-      mostraToast(`Giornata in evidenza (${divisione}) salvata`);
+      mostraToast(nome ? `Giornata in evidenza (${nome}) salvata` : "Giornata in evidenza salvata");
     } catch (errore) {
       console.error("Giornata non salvata:", errore);
       mostraToast("Impossibile salvare. Riprova.", { errore: true });
@@ -170,6 +171,38 @@ function preparaImpostazioni(impostazioni) {
     // il gestionale continuerebbe a scrivere sull'annata precedente
     impostaEdizioneLocale(scelta);
     location.reload();
+  });
+
+  // Divisione unica dell'edizione su cui lavora il gestionale (vedi divisione.js).
+  // Dopo il salvataggio le pagine aperte, questa compresa, si ricaricano da sole
+  const unica = $("toggle-divisione-unica");
+  $("anno-divisione-unica").textContent = `(${edition})`;
+  unica.checked = impostazioni.divisioneUnica?.[edition] === true;
+  unica.addEventListener("change", async () => {
+    const acceso = unica.checked;
+    const ok = await conferma(
+      acceso
+        ? `Nel ${edition} tutte le squadre staranno insieme, senza Superiori e Giovani. ` +
+            "Squadre e calendari già creati in Superiori o Giovani restano salvati ma non si vedono più: " +
+            "le iscrizioni andranno convertite nella divisione unica."
+        : `Nel ${edition} tornano le divisioni Superiori e Giovani. ` +
+            "Squadre e calendario della divisione unica restano salvati ma non si vedono più.",
+      {
+        titolo: acceso ? "Usare una divisione unica?" : "Tornare a Superiori e Giovani?",
+        ok: acceso ? "Usa la divisione unica" : "Torna a due divisioni",
+      }
+    );
+    if (!ok) {
+      unica.checked = !acceso;
+      return;
+    }
+    await salvaImpostazione(
+      { [`divisioneUnica/${edition}`]: acceso || null },
+      acceso ? "Divisione unica attiva" : "Divisioni Superiori e Giovani attive",
+      () => {
+        unica.checked = !acceso;
+      }
+    );
   });
 
   const interruttori = [
@@ -436,7 +469,8 @@ export const initDashboard = async () => {
   }
 
   preparaImpostazioni(impostazioni);
-  $("divisione-classifiche").textContent = `· ${getSelectedDivision()}`;
+  const nome = nomeDivisione(getSelectedDivision());
+  $("divisione-classifiche").textContent = nome ? `· ${nome}` : "";
   $("aggiorna-registro").addEventListener("click", () => mostraRegistro());
   $("altre-modifiche").addEventListener("click", () => mostraRegistro({ continua: true }));
 

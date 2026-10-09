@@ -1,6 +1,6 @@
 import { impostazioniPronte, osservaImpostazioni } from "./impostazioni.js";
 import { paginaAttiva } from "./pagine-attive.js";
-import { DIVISIONI, getSelectedDivision, loadSavedOption } from "./divisione.js";
+import { DIVISIONI, getSelectedDivision, loadSavedOption, nomeDivisione } from "./divisione.js";
 import { osservaDivisione, mostraErroreCaricamento } from "./dati-torneo.js";
 import { posizioneSquadra, calcolaMarcatori, squadraDeiGiocatori } from "./components/classifiche.js";
 import { rappresentaPartita, nomeGiornata } from "./components/calendario.js";
@@ -26,10 +26,15 @@ rosa di una squadra. I dati si aggiornano in tempo reale.
 const parametri = new URLSearchParams(location.search);
 const chiave = parametri.get("nome") || "";
 
-loadSavedOption();
-const divisione = DIVISIONI.includes(parametri.get("divisione"))
-  ? parametri.get("divisione")
-  : getSelectedDivision();
+// Le divisioni dell'edizione si conoscono dopo le impostazioni (vedi avvia)
+let divisione = null;
+
+function scegliDivisione() {
+  loadSavedOption();
+  divisione = DIVISIONI.includes(parametri.get("divisione"))
+    ? parametri.get("divisione")
+    : getSelectedDivision();
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -69,7 +74,7 @@ function disegnaIntestazione(squadra, posizione) {
   if (url && logo.getAttribute("src") !== url) logo.src = url;
   logo.hidden = !url;
 
-  const dettagli = [divisione];
+  const dettagli = [nomeDivisione(divisione)].filter(Boolean);
   if (posizione?.girone) dettagli.push(`Girone ${posizione.girone}`);
   $("dettagli-squadra").textContent = dettagli.join(" · ");
 }
@@ -235,6 +240,7 @@ async function avvia() {
   }
 
   await impostazioniPronte;
+  scegliDivisione();
 
   let ultimi = { calendario: null };
   let paginaSpenta = false;

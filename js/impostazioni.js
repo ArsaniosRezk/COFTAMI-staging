@@ -1,6 +1,6 @@
 import { PERCORSO_IMPOSTAZIONI } from "./ambiente.js";
 import { db, ref, onValue } from "./firebase.js";
-import { impostaEdizione, edizioneForzata } from "./divisione.js";
+import { impostaEdizione, impostaDivisioni, edizioneForzata } from "./divisione.js";
 
 /*
 ===================================
@@ -20,6 +20,7 @@ finale, iscrizioni aperte...), una dopo l'altra.
 let ultime = null;
 const ascoltatori = new Set();
 let edizioneIniziale = null;
+let divisioneUnicaIniziale = null;
 
 export const impostazioniPronte = new Promise((resolve) => {
   onValue(
@@ -28,13 +29,23 @@ export const impostazioniPronte = new Promise((resolve) => {
       ultime = snapshot.val() || {};
       const edizione = ultime.edizioneCorrente ? String(ultime.edizioneCorrente) : null;
 
+      // Divisioni dell'edizione (vedi divisione.js)
+      const divisioneUnica = JSON.stringify(ultime.divisioneUnica || {});
+
       if (edizioneIniziale === null) {
         edizioneIniziale = edizione;
+        divisioneUnicaIniziale = divisioneUnica;
         impostaEdizione(edizione);
+        impostaDivisioni(ultime.divisioneUnica);
       } else if (edizione && edizione !== edizioneIniziale && !edizioneForzata) {
         // L'amministratore ha cambiato edizione mentre la pagina era aperta:
         // i dati mostrati sono dell'annata precedente
         impostaEdizione(edizione);
+        location.reload();
+        return;
+      } else if (divisioneUnica !== divisioneUnicaIniziale) {
+        // Divisione unica accesa o spenta: i dati vanno letti da un'altra parte
+        impostaDivisioni(ultime.divisioneUnica);
         location.reload();
         return;
       }

@@ -205,7 +205,8 @@ a {
   color: var(--inchiostro);
 }
 
-.app-header-divisione {
+.app-header-divisione,
+.divisione-unica .division-switch {
   display: none;
 }
 

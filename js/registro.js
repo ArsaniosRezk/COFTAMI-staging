@@ -9,6 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { PERCORSO_REGISTRO } from "./ambiente.js";
 import { db, ref, get, update } from "./firebase.js";
+import { nomeDivisione } from "./divisione.js";
 
 /*
 ===================================
@@ -157,7 +158,7 @@ export function descriviPercorso(percorso) {
     const [, edizione, terzo, nodo, giornata, partita, campo] = parti;
     if (terzo === "Iscrizioni") return `Iscrizione · ${squadre(nodo || "tutte")}`;
     if (terzo === "GiornataDaMostrare") return `Giornata da mostrare · edizione ${edizione}`;
-    const etichetta = [NOMI_NODI[nodo] || nodo || "Divisione", terzo];
+    const etichetta = [NOMI_NODI[nodo] || nodo || "Divisione", nomeDivisione(terzo)];
     if (nodo === "Squadre") {
       if (giornata) etichetta.push(squadre(giornata));
       if (partita) etichetta.push(partita);

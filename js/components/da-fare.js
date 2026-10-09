@@ -1,5 +1,5 @@
 import { getData } from "../firebase.js";
-import { edition, DIVISIONI } from "../divisione.js";
+import { edition, DIVISIONI, DIVISIONE_UNICA, divisioneUnica } from "../divisione.js";
 
 /*
 ===================================
@@ -18,6 +18,13 @@ export function refertoConfermato(referto, partita) {
     Number(partita.GolSquadraCasa) === Number(referto.GolSquadraCasa) &&
     Number(partita.GolSquadraOspite) === Number(referto.GolSquadraOspite)
   );
+}
+
+// Con la divisione unica conta solo la conversione fatta lì: un'iscrizione già
+// diventata squadra in Superiori o Giovani va convertita di nuovo
+export function iscrizioneConvertita(iscrizione) {
+  if (iscrizione?.Stato !== "Convertita") return false;
+  return !divisioneUnica() || iscrizione.ConvertitaIn === DIVISIONE_UNICA;
 }
 
 // Tutti i referti dell'edizione: [{ divisione, giornata, chiave, referto, partita }]
@@ -50,8 +57,7 @@ export async function contaDaFare() {
   return {
     refertiDaConfermare: referti.filter(({ referto, partita }) => !refertoConfermato(referto, partita))
       .length,
-    iscrizioniNuove: Object.values(iscrizioni || {}).filter(
-      (iscrizione) => iscrizione?.Stato !== "Convertita"
-    ).length,
+    iscrizioniNuove: Object.values(iscrizioni || {}).filter((iscrizione) => !iscrizioneConvertita(iscrizione))
+      .length,
   };
 }

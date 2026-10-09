@@ -48,6 +48,14 @@ const DATI = {
       },
     },
   },
+  "Beach Volley": {
+    Accesso: { Pin: "sabbia123", Sessioni: { vecchia: "pinvecchio" } },
+    Impostazioni: { edizioneCorrente: "2026", iscrizioniAperte: true },
+    2026: {
+      Iscrizioni: { "Maschile-Esistente": { NomeSquadra: "Esistente", Divisione: "Maschile" } },
+      Maschile: { Squadre: { A: { Nome: "A" } } },
+    },
+  },
 };
 
 beforeEach(async () => {
@@ -170,6 +178,16 @@ test("iscrizione: dati non validi rifiutati", async () => {
   );
 });
 
+test("iscrizione nella divisione unica: solo se l'edizione ha la divisione unica", async () => {
+  const db = anonimo();
+  const unica = iscrizione({ Divisione: "Unica" });
+  await assertFails(set(ref(db, "Calcio/2026/Iscrizioni/Unica-San_Giorgio"), unica));
+  await env.withSecurityRulesDisabled((ctx) =>
+    set(ref(ctx.database(), "Impostazioni/divisioneUnica/2026"), true)
+  );
+  await assertSucceeds(set(ref(db, "Calcio/2026/Iscrizioni/Unica-San_Giorgio"), unica));
+});
+
 // --- REFERTI ---
 
 test("referto per una partita in calendario: accettato senza codice e senza accesso", async () => {
@@ -215,4 +233,97 @@ test("ognuno può controllare solo la propria voce dell'elenco", async () => {
   await assertSucceeds(get(ref(admin(), "Amministratori/mario,rossi@gmail,com")));
   await assertSucceeds(get(ref(qualcuno(), "Amministratori/altro@gmail,com")));
   await assertFails(get(ref(qualcuno(), "Amministratori/mario,rossi@gmail,com")));
+});
+
+// --- BEACH VOLLEY (gestionale con PIN e accesso anonimo) ---
+
+const anonimoBV = (uid = "bv1") =>
+  env.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).database();
+const iscrizioneBV = (extra = {}) =>
+  iscrizione({
+    Divisione: "Maschile",
+    NomeSquadra: "Sabbia",
+    ModuloFirmato: { NomeFile: "modulo.pdf", Percorso: "Moduli/BV-2026/Maschile-Sabbia-abc.pdf" },
+    ...extra,
+  });
+
+test("beach volley: il pubblico legge le impostazioni e il nome di una squadra iscritta, nient'altro", async () => {
+  const db = anonimo();
+  await assertSucceeds(get(ref(db, "Beach Volley/Impostazioni")));
+  await assertSucceeds(get(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Esistente/NomeSquadra")));
+  for (const percorso of [
+    "Beach Volley",
+    "Beach Volley/Accesso/Pin",
+    "Beach Volley/Accesso/Sessioni",
+    "Beach Volley/2026/Iscrizioni",
+    "Beach Volley/2026/Iscrizioni/Maschile-Esistente",
+    "Beach Volley/2026/Maschile/Squadre",
+  ]) {
+    await assertFails(get(ref(db, percorso)));
+  }
+  await assertFails(get(ref(anonimoBV(), "Beach Volley/Accesso/Pin")));
+});
+
+test("beach volley: iscrizione nuova accettata, non sovrascrive, rifiutata a iscrizioni chiuse", async () => {
+  const db = anonimo();
+  await assertSucceeds(set(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Sabbia"), iscrizioneBV()));
+  await assertFails(set(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Esistente"), iscrizioneBV()));
+  await assertFails(
+    set(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Altra"), iscrizioneBV({ Divisione: "Superiori" }))
+  );
+  await assertFails(
+    set(
+      ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Altra"),
+      iscrizioneBV({ ModuloFirmato: { Percorso: "Moduli/2026/x.pdf" } })
+    )
+  );
+  await env.withSecurityRulesDisabled((ctx) =>
+    set(ref(ctx.database(), "Beach Volley/Impostazioni/iscrizioniAperte"), false)
+  );
+  await assertFails(set(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Nuova"), iscrizioneBV()));
+});
+
+test("beach volley: con il PIN sbagliato non si entra", async () => {
+  const db = anonimoBV();
+  await assertFails(set(ref(db, "Beach Volley/Accesso/Sessioni/bv1"), "sbagliato"));
+  await assertFails(set(ref(db, "Beach Volley/Accesso/Sessioni/altro"), "sabbia123"));
+  await assertFails(set(ref(db, "Beach Volley/Accesso/Pin"), "nuovopin"));
+  await assertFails(get(ref(db, "Beach Volley/2026/Iscrizioni")));
+  await assertFails(get(ref(anonimoBV("vecchia"), "Beach Volley/2026/Iscrizioni")));
+});
+
+test("beach volley: con il PIN giusto si legge e scrive tutto il beach volley, non il calcio", async () => {
+  const db = anonimoBV();
+  await assertSucceeds(set(ref(db, "Beach Volley/Accesso/Sessioni/bv1"), "sabbia123"));
+  await assertSucceeds(get(ref(db, "Beach Volley/2026/Iscrizioni")));
+  await assertSucceeds(
+    update(ref(db, "Beach Volley/2026/Iscrizioni/Maschile-Esistente"), { Stato: "Convertita" })
+  );
+  await assertSucceeds(set(ref(db, "Beach Volley/2026/Maschile/Squadre/B"), { Nome: "B" }));
+  await assertSucceeds(
+    update(ref(db, "Beach Volley/Impostazioni"), { iscrizioniAperte: false, adminPin: null })
+  );
+  await assertFails(get(ref(db, "Calcio/2026/Iscrizioni")));
+  await assertFails(set(ref(db, "Impostazioni/manutenzione"), true));
+});
+
+test("beach volley: cambiando il PIN si resta dentro e gli altri escono", async () => {
+  await assertSucceeds(set(ref(anonimoBV("bv1"), "Beach Volley/Accesso/Sessioni/bv1"), "sabbia123"));
+  await assertSucceeds(set(ref(anonimoBV("bv2"), "Beach Volley/Accesso/Sessioni/bv2"), "sabbia123"));
+  await assertFails(update(ref(anonimoBV("bv1"), "Beach Volley/Accesso"), { Pin: "corto" }));
+  await assertSucceeds(
+    update(ref(anonimoBV("bv1"), "Beach Volley/Accesso"), {
+      Pin: "nuovopin1",
+      Sessioni: { bv1: "nuovopin1" },
+    })
+  );
+  await assertSucceeds(get(ref(anonimoBV("bv1"), "Beach Volley/2026/Iscrizioni")));
+  await assertFails(get(ref(anonimoBV("bv2"), "Beach Volley/2026/Iscrizioni")));
+});
+
+test("beach volley: senza PIN nel database nessuno entra con il PIN", async () => {
+  await env.withSecurityRulesDisabled((ctx) => remove(ref(ctx.database(), "Beach Volley/Accesso")));
+  await assertFails(set(ref(anonimoBV(), "Beach Volley/Accesso/Sessioni/bv1"), "qualsiasi"));
+  await assertFails(get(ref(anonimoBV(), "Beach Volley/2026/Iscrizioni")));
+  await assertSucceeds(get(ref(admin(), "Beach Volley/2026/Iscrizioni")));
 });

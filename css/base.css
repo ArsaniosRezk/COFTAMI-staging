@@ -500,7 +500,8 @@ main [id] {
   background-color: var(--grey-row);
 }
 
-.division-switch[hidden] {
+.division-switch[hidden],
+.divisione-unica .division-switch {
   display: none;
 }
 

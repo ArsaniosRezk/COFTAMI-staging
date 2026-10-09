@@ -15,7 +15,10 @@ import { writeFileSync } from "node:fs";
 
 const SITO = "https://coftamilano.com";
 const DATABASE = "https://cofta-mi-default-rtdb.europe-west1.firebasedatabase.app";
+// Come js/divisione.js: un'edizione con Impostazioni/divisioneUnica/{edizione}
+// ha la sola divisione "Unica"
 const DIVISIONI = ["Superiori", "Giovani"];
+const DIVISIONE_UNICA = "Unica";
 
 const PAGINE = [
   { percorso: "/", frequenza: "weekly", priorita: "1.0" },
@@ -44,8 +47,9 @@ const escapeXml = (testo) =>
     .replace(/"/g, "&quot;");
 
 const edizione = await leggi("Impostazioni/edizioneCorrente");
+const divisioneUnica = (await leggi(`Impostazioni/divisioneUnica/${edizione}`)) === true;
 const squadre = [];
-for (const divisione of DIVISIONI) {
+for (const divisione of divisioneUnica ? [DIVISIONE_UNICA] : DIVISIONI) {
   const chiavi = Object.keys((await leggi(`Calcio/${edizione}/${divisione}/Squadre`, "?shallow=true")) || {});
   chiavi.sort().forEach((nome) => {
     const parametri = new URLSearchParams({ divisione, nome });

@@ -2,6 +2,7 @@ import { recuperaCalendario, scheletroCalendario } from "./components/calendario
 import { gestisciAttesaTorneo } from "./components/pre-torneo.js";
 import { osservaDivisione, mostraErroreCaricamento } from "./dati-torneo.js";
 import { giornateNumerate, dataPartita, haRisultato, nomeSquadra } from "./utils/torneo.js";
+import { nomeDivisione } from "./divisione.js";
 
 // Ascolto dei dati della divisione mostrata: va fermato quando si cambia divisione
 let fermaAscolto = null;
@@ -24,7 +25,7 @@ function aggiornaDatiStrutturati({ calendario, divisione }) {
       const [casa, ospite] = chiave.split(":").map(nomeSquadra);
       eventi.push({
         "@type": "SportsEvent",
-        name: `${casa} - ${ospite} (${divisione}, giornata ${giornata})`,
+        name: `${casa} - ${ospite} (${[nomeDivisione(divisione), `giornata ${giornata}`].filter(Boolean).join(", ")})`,
         startDate: inizio.toISOString(),
         sport: "Calcio",
         eventStatus: "https://schema.org/EventScheduled",

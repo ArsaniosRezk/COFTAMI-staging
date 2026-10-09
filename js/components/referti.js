@@ -1,5 +1,5 @@
 import { db, ref, update, remove, getData } from "../firebase.js";
-import { edition, DIVISIONI } from "../divisione.js";
+import { edition, DIVISIONI, divisioneUnica, nomeDivisione } from "../divisione.js";
 import { formatDateTime } from "../utils/formattazione.js";
 import { nomeSquadra } from "../utils/torneo.js";
 import { mostraToast, conferma } from "../utils/interfaccia.js";
@@ -89,7 +89,8 @@ function schedaReferto(voce, { azioni = false, conCommenti = true, ridisegna = n
   if (azioni && !refertoConfermato(referto, partita)) scheda.classList.add("da-confermare");
 
   const testa = crea("header", "referto-testa");
-  testa.appendChild(crea("span", "referto-dove", `${divisione} · ${nomeGiornata(giornata)}`));
+  const dove = [nomeDivisione(divisione), nomeGiornata(giornata)].filter(Boolean).join(" · ");
+  testa.appendChild(crea("span", "referto-dove", dove));
   if (azioni) testa.appendChild(crea("span", `badge ${classe}`, testo));
   scheda.appendChild(testa);
 
@@ -261,17 +262,21 @@ function barraFiltri(contenitore, ridisegna, conteggi) {
     return insieme;
   };
 
-  barra.append(
+  barra.appendChild(
     gruppo("Stato", "stato", [
       ["da-confermare", `Da confermare (${conteggi.daConfermare})`],
       ["tutti", `Tutti (${conteggi.tutti})`],
-    ]),
-    gruppo("Divisione", "divisione", [
-      ["tutte", "Entrambe"],
-      ["Superiori", "Superiori"],
-      ["Giovani", "Giovani"],
     ])
   );
+  // Con la divisione unica non c'è niente da filtrare
+  if (!divisioneUnica()) {
+    barra.appendChild(
+      gruppo("Divisione", "divisione", [
+        ["tutte", "Entrambe"],
+        ...DIVISIONI.map((divisione) => [divisione, divisione]),
+      ])
+    );
+  }
   contenitore.appendChild(barra);
 }
 
@@ -285,7 +290,7 @@ export async function showReportOptions() {
     filtri.stato ??= daConfermare.length ? "da-confermare" : "tutti";
 
     const visibili = (filtri.stato === "da-confermare" ? daConfermare : referti).filter(
-      ({ divisione }) => filtri.divisione === "tutte" || divisione === filtri.divisione
+      ({ divisione }) => divisioneUnica() || filtri.divisione === "tutte" || divisione === filtri.divisione
     );
 
     contenitore.replaceChildren();

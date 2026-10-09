@@ -1,4 +1,5 @@
 import { nomeSquadra } from "./dati.js";
+import { nomeDivisione } from "../../divisione.js";
 
 /*
 ===================================
@@ -397,7 +398,9 @@ export function disegnaIntestazione(ctx, logoCofta, titolo, sottotitolo) {
 }
 
 export function disegnaPiePagina(ctx, division, y = ctx.canvas.height - 108) {
-  const testo = division.toUpperCase();
+  // La divisione unica non ha nome: niente fascia
+  const testo = nomeDivisione(division).toUpperCase();
+  if (!testo) return;
   ctx.save();
   ctx.font = font(400, 50, FONT_TITOLI);
   const larghezza = ctx.measureText(testo).width + 90;

@@ -1,5 +1,5 @@
 import { db, ref, update, getData, getPaths } from "../firebase.js";
-import { getSelectedDivision } from "../divisione.js";
+import { getSelectedDivision, nomeDivisione } from "../divisione.js";
 import { giornateNumerate, giornataCorrente, haRisultato, nomeSquadra } from "../utils/torneo.js";
 import { mostraToast, conferma } from "../utils/interfaccia.js";
 import { aggiornaConteggi } from "../utils/gestionale-eventi.js";
@@ -70,12 +70,9 @@ export async function showMatchesOptions() {
     const giornate = ordinaGiornate(dati.calendario);
 
     if (!giornate.length) {
+      const calendario = ["Il calendario", nomeDivisione(divisione)].filter(Boolean).join(" ");
       contenitore.replaceChildren(
-        crea(
-          "p",
-          "vuoto",
-          `Il calendario ${divisione} non è ancora pubblicato: preparalo dalla sezione Calendario.`
-        )
+        crea("p", "vuoto", `${calendario} non è ancora pubblicato: preparalo dalla sezione Calendario.`)
       );
       return;
     }

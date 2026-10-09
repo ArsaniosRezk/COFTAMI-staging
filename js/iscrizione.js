@@ -1,6 +1,6 @@
 import { PERCORSO_IMPOSTAZIONI } from "./ambiente.js";
 import { getData, setData, uploadFile, attivaAppCheck } from "./firebase.js";
-import { edition } from "./divisione.js";
+import { edition, divisioneUnica, DIVISIONE_UNICA } from "./divisione.js";
 import { impostazioniPronte, osservaImpostazioni } from "./impostazioni.js";
 import { capitalize } from "./utils/formattazione.js";
 import { pulisciTelefono, telefonoValido } from "./utils/contatti.js";
@@ -421,7 +421,9 @@ async function inviaIscrizione(event) {
 
   let errori = 0;
 
-  const divisione = divisioneEl.value;
+  // Con la divisione unica la divisione non si sceglie
+  const divisione = divisioneUnica() ? DIVISIONE_UNICA : divisioneEl.value;
+  const traParentesi = divisioneUnica() ? "" : ` (${divisione})`;
   if (!divisione) {
     document.getElementById("err-divisione").textContent = "Seleziona la divisione.";
     divisioneEl.classList.add("invalid");
@@ -544,7 +546,7 @@ async function inviaIscrizione(event) {
           .includes("PERMISSION")
       ) {
         document.getElementById("err-chiesa").textContent =
-          `Risulta già un'iscrizione per "${nomeSquadra}" (${divisione}). ` +
+          `Risulta già un'iscrizione per "${nomeSquadra}"${traParentesi}. ` +
           "Per modificarla scrivi a info@coftamilano.com; se è un'altra squadra aggiungi una lettera (A, B…) al nome.";
         chiesaEl.classList.add("invalid");
         document.getElementById("form-error").textContent =
@@ -559,7 +561,7 @@ async function inviaIscrizione(event) {
 
     const confermaEl = document.getElementById("conferma-testo");
     confermaEl.textContent =
-      `Abbiamo ricevuto l'iscrizione di ${nomeSquadra} (${divisione}). ` +
+      `Abbiamo ricevuto l'iscrizione di ${nomeSquadra}${traParentesi}. ` +
       "Ti contatteremo con le istruzioni per versare la quota di iscrizione. " +
       "Per qualsiasi modifica scrivi a info@coftamilano.com.";
 
@@ -588,6 +590,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Il modulo viene costruito subito: se la rete è lenta l'utente vede comunque i campi
   costruisciModulo(caricaBozza());
+
+  // Con la divisione unica il campo "Divisione" sparisce (vedi divisione.js)
+  const campoDivisione = document.getElementById("isc-divisione").closest(".field");
+  campoDivisione.classList.toggle("hidden", divisioneUnica());
+  impostazioniPronte.then(() => campoDivisione.classList.toggle("hidden", divisioneUnica()));
 
   // Alcuni browser ripristinano il file scelto tornando indietro: riallineo l'etichetta
   mostraFileScelto();

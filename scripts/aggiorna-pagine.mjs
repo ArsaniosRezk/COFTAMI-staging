@@ -50,7 +50,8 @@ const ORGANIZZAZIONE = {
 /*
  Configurazione delle pagine:
  - voce: voce del menu evidenziata
- - divisione: mostra il selettore Superiori/Giovani nell'header
+ - divisione: mostra il selettore Superiori/Giovani nell'header (nascosto
+   comunque nelle edizioni con la divisione unica, vedi js/divisione.js)
  - firebase: la pagina legge i dati del torneo (precarica l'SDK)
  - css / js: fogli e script propri della pagina
 */
